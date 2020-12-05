@@ -1,0 +1,113 @@
+version: '3'
+
+volumes:
+  data01: {}
+  prometheus_data: {}
+  grafana_data: {}
+
+services:
+
+  celery-flask:
+    build: ../app
+    environment:
+      - FLASK_ENV=development
+    entrypoint: ["flask", "run"]
+    volumes:
+      - ../app/app:/app
+    ports:
+      - "5000:5000"
+
+  celery-worker:
+    build: ../app
+    entrypoint: ["watchmedo","auto-restart","-d","/app","--","celery","-A","app.app:celery", "worker","--loglevel=debug"]
+    volumes:
+      - ../app/app:/app
+  
+  flower:
+    image: damian0o/flower
+    ports:
+      - "5555:5555"
+  
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+  
+  elastic:
+    image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.1"
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+      - http.cors.allow-headers=X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
+      - http.cors.allow-credentials=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - "data01:/usr/share/elasticsearch/data"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+  
+  dejavu:
+    image: appbaseio/dejavu
+    ports:
+      - "1358:1358"
+  
+  elastichq:
+    image: elastichq/elasticsearch-hq
+    ports:
+      - "5001:5000"
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.38.4
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /cgroup:/cgroup:ro
+    restart: unless-stopped
+    expose:
+      - 8080
+    ports:
+      - 8080:8080
+    labels:
+      org.label-schema.group: "monitoring"
+
+  prometheus:
+    image: prom/prometheus:v2.23.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:7.3.4
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+    expose:
+      - 3000
+    labels:
+      org.label-schema.group: "monitoring"

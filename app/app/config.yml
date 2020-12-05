@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: news-monitoring-config
+  namespace: apps
+data:
+  settings.conf: |
+    celery-backend = redis://redis:6379/0
+    elasticsearch-host = elasticsearch:9200
+
+  
