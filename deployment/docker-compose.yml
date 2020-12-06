@@ -24,7 +24,7 @@ services:
       - ../app/app:/app
   
   flower:
-    image: damian0o/flower
+    build: ../flower
     ports:
       - "5555:5555"
   
@@ -70,7 +70,7 @@ services:
       - /var/run:/var/run:rw
       - /sys:/sys:ro
       - /var/lib/docker:/var/lib/docker:ro
-      - /cgroup:/cgroup:ro
+      # - /cgroup:/cgroup:ro # not working on mac
     restart: unless-stopped
     expose:
       - 8080
